@@ -10,18 +10,23 @@
 
 #include "game_platform.h"
 
-// NOTE(ivan): Memory region/partition.
-struct memory_partition {
+// NOTE(ivan): Memory block.
+struct memory_partition_block {
 	piece Piece;
 	uptr Marker;
-	uptr MinBlockSize;
 
-	memory_partition *NextPiece;
+	memory_partition_block *PrevBlock;
+};
+
+// NOTE(ivan): Memory region/partition.
+struct memory_partition {
+	memory_partition_block *CurrentBlock;
+	uptr MinBlockSize;
 
 	ticket_mutex Mutex;
 };
 
-b32 InitializePartition(memory_partition *Partition, uptr InitSize, uptr MinBlockSize);
+b32 InitializePartition(memory_partition *Partition, uptr InitSize, uptr MinBlockSize = 0);
 void ResetPartition(memory_partition *Partition);
 
 #define PushType(Partition, Type) (Type *)PushSize(Partition, sizeof(Type))

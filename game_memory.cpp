@@ -7,34 +7,48 @@
    ===================================================================== */
 #include "game_memory.h"
 
+static memory_partition_block *
+AllocPartitionBlock(memory_partition_block *PrevBlock, uptr InitSize) {
+	Assert(InitSize);
+	
+	memory_partition_block *Result = 0;
+
+	if (sizeof(memory_partition_block) < GameState.Hunk.Size) {
+		Result = ConsumeType(&GameState.Hunk, memory_partition_block);
+
+		if (InitSize < GameState.Hunk.Size) {
+			Result->Piece.Base = (u8 *)ConsumeSize(&GameState.Hunk, InitSize);
+			Result->Piece.Size = InitSize;
+
+			Result->PrevBlock = PrevBlock;
+		}
+	}
+
+	return Result;
+}
+
 b32
 InitializePartition(memory_partition *Partition, uptr InitSize, uptr MinBlockSize) {
 	Assert(Partition);
 	Assert(InitSize);
-	Assert(!Partition->Piece.Base); // NOTE(ivan): Must be zero-initialized, and must not be called for an already initialized partition.
 
 	b32 Result = false;
 
-	if (InitSize < GameState.Hunk.Size) {
-		EnterTicketMutex(&GameState.HunkMutex);		
-		Partition->Piece.Base = (u8 *)ConsumeSize(&GameState.Hunk, InitSize);
-		LeaveTicketMutex(&GameState.HunkMutex);
-		
-		Partition->Piece.Size = InitSize;
-		Partition->Marker = 0;
+	EnterTicketMutex(&Partition->Mutex);
+	
+	// NOTE(ivan): A given partition is required to be zero-initialized, and this function
+	// must not be called for a partition that is already initialized.
+	Assert(!Partition->CurrentBlock);
+	
+	Partition->CurrentBlock = AllocPartitionBlock(Partition->CurrentBlock, InitSize < MinBlockSize ? MinBlockSize : InitSize);
+	if (Partition->CurrentBlock) {
+		if (!MinBlockSize)
+			MinBlockSize = AlignPow2(InitSize, (uptr)4);
 		Partition->MinBlockSize = MinBlockSize;
-
-		Partition->NextPiece = 0;
-
-		// NOTE(ivan): Memory partition might be reseted before, so it should be zero-cleaned,
-		// because we always allocate new memory being zero-initialized.
-		uptr At = Partition->Piece.Size;
-		while (At--)
-			Partition->Piece.Base[At] = 0;
-		
 		Result = true;
 	}
 
+	LeaveTicketMutex(&Partition->Mutex);
 	return Result;
 }
 
@@ -44,12 +58,8 @@ ResetPartition(memory_partition *Partition) {
 
 	EnterTicketMutex(&Partition->Mutex);
 
-	Partition->Marker = 0;
-	for (memory_partition *Piece = Partition->NextPiece; Piece; Piece = Piece->NextPiece) {
-		EnterTicketMutex(&Piece->Mutex);
-		Piece->Marker = 0;
-		LeaveTicketMutex(&Piece->Mutex);
-	}
+	for (memory_partition_block *Block = Partition->CurrentBlock; Block; Block = Block->PrevBlock)
+		Block->Marker = 0;
 
 	LeaveTicketMutex(&Partition->Mutex);
 }
@@ -62,14 +72,24 @@ PushSize(memory_partition *Partition, uptr Size) {
 	void *Result = 0;
 
 	EnterTicketMutex(&Partition->Mutex);
+
+	// NOTE(ivan): Search for a block that can handle the size.
+	memory_partition_block *Block;
+	for (Block = Partition->CurrentBlock; Block; Block = Block->PrevBlock) {
+		if (Size < (Block->Piece.Size - Block->Marker))
+			break;
+	}
+
+	// NOTE(ivan): No block can handle - allocate a new one.
+	if (!Block)
+		Block = AllocPartitionBlock(Partition->CurrentBlock, Size > Partition->MinBlockSize ? AlignPow2(Size, (uptr)4) : Partition->MinBlockSize);
 	
-	// NOTE(ivan): Check whether a current partition piece can handle the size.
-	if (Size < (Partition->Piece.Size - Partition->Marker)) {
-		Result = (u8 *)((uptr)Partition->Piece.Base + Partition->Marker);
-		Partition->Marker += Size;
+	if (Block) {
+		Result = (void *)(Block->Piece.Base + Block->Marker);
+		Block->Marker += Size;
 	}
 
 	LeaveTicketMutex(&Partition->Mutex);
-	
+			
 	return Result;
 }

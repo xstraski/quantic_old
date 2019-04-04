@@ -22,7 +22,7 @@ GameUpdate(game_update_type UpdateType) {
 		// Game initialization.
 		///////////////////////////////////////////////////////////////////
 	case GameUpdateType_Prepare: {
-		InitPartition(&GameState.PerFramePartition, Megabytes(64));
+		InitializePartition(&GameState.PerFramePartition, Megabytes(64));
 	} break;
 
 		///////////////////////////////////////////////////////////////////
