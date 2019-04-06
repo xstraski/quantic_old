@@ -1,3 +1,10 @@
+/* =====================================================================
+   $File: $
+   $Date: $
+   $Revision: $
+   $Author: Ivan Avdonin $
+   $Notice: Copyright (C) 2019, Ivan Avdonin. All Rights Reserved. $
+   ===================================================================== */
 #ifndef GAME_KEYS_H
 #define GAME_KEYS_H
 

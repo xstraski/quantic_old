@@ -162,7 +162,7 @@ struct bit_scan_result {
 
 // NOTE(ivan): Bit scan.
 inline bit_scan_result
-BitScanForward(u32 Value)
+FindLeastSignificantBit(u32 Value)
 {
 	bit_scan_result Result = {};
 	
@@ -181,7 +181,7 @@ BitScanForward(u32 Value)
 	return Result;
 }
 inline bit_scan_result
-BitScanReverse(u32 Value)
+FindMostSignificantBit(u32 Value)
 {
 	bit_scan_result Result = {};
 
@@ -296,5 +296,9 @@ LeaveTicketMutex(ticket_mutex *Mutex) {
 // NOTE(ivan): Platform-specific interface.
 //
 void PlatformQuit(s32 QuitCode);
+
+piece PlatformReadEntireFile(const char *FileName);
+b32 PlatformWriteEntireFile(const char *FileName, void *Base, uptr Size);
+void PlatformFreeEntireFilePiece(piece *Piece);
 
 #endif // #ifndef GAME_PLATFORM_H

@@ -33,4 +33,21 @@ CopyStringN(char *DestString, const char *SrcString, uptr MaxCount) {
 	}
 }
 
+inline b32
+AreStringsEqual(const char *String1, const char *String2) {
+	Assert(String1);
+	Assert(String2);
+
+	b32 Result = true;
+
+	while (*String1 && *String2) {
+		if (*String1 != *String2) {
+			Result = false;
+			break;
+		}
+	}
+
+	return Result;
+}
+
 #endif // #ifndef GAME_MISC_H

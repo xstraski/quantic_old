@@ -592,6 +592,75 @@ PlatformQuit(s32 QuitCode) {
 	Win32State.QuitCode = QuitCode;
 }
 
+piece
+PlatformReadEntireFile(const char *FileName) {
+	Assert(FileName);
+
+	piece Result = {};
+
+	HANDLE File = CreateFileA(FileName,
+							  GENERIC_READ,
+							  FILE_SHARE_READ,
+							  0,
+							  OPEN_EXISTING,
+							  0,
+							  0);
+	if (File != INVALID_HANDLE_VALUE) {
+		LARGE_INTEGER FileSize64;
+		if (GetFileSizeEx(File, &FileSize64)) {
+			u32 FileSize = SafeTruncateU64(FileSize64.QuadPart);
+			if (FileSize) {
+				Result.Base = (u8 *)VirtualAlloc(0, FileSize, MEM_COMMIT, PAGE_READWRITE);
+				if (Result.Base) {
+					Result.Size = FileSize;
+
+					DWORD Unused;
+					if (ReadFile(File, Result.Base, FileSize, &Unused, 0)) {
+						// NOTE(ivan): Success.
+					}
+				}
+			}
+		}
+
+		CloseHandle(File);
+	}
+
+	return Result;
+}
+
+b32
+PlatformWriteEntireFile(const char *FileName, void *Base, uptr Size) {
+	Assert(FileName);
+	Assert(Base);
+	Assert(Size);
+	
+	b32 Result = false;
+
+	HANDLE File = CreateFileA(FileName,
+							  GENERIC_WRITE,
+							  0,
+							  0,
+							  CREATE_ALWAYS,
+							  FILE_ATTRIBUTE_NORMAL,
+							  0);
+	if (File == INVALID_HANDLE_VALUE) {
+		DWORD Unused;
+		if (WriteFile(File, Base, SafeTruncateU64(Size), &Unused, 0)) {
+			Result = true;
+		}
+
+		CloseHandle(File);
+	}
+
+	return Result;
+}
+
+void
+PlatformFreeEntireFilePiece(piece *Piece) {
+	Assert(Piece);
+	VirtualFree(Piece->Base, 0, MEM_RELEASE);
+}
+
 int CALLBACK
 WinMain(HINSTANCE Instance,
 		HINSTANCE PrevInstance,
@@ -645,7 +714,7 @@ WinMain(HINSTANCE Instance,
 			MEMORYSTATUSEX MemStat;
 			MemStat.dwLength = sizeof(MemStat);
 			if (GlobalMemoryStatusEx(&MemStat)) {
-				HunkSize = (uptr)(0.8f * (f32)MemStat.ullAvailPhys);
+				HunkSize = (uptr)(0.7f * (f32)MemStat.ullAvailPhys);
 			} else {
 #if defined(_M_IX86)
 				HunkSize = IsWow64 ? Megabytes(3584) : Gigabytes(3);

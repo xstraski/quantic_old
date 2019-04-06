@@ -12,6 +12,8 @@
 #endif
 #include "game_misc.cpp"
 #include "game_memory.cpp"
+#include "game_image.cpp"
+#include "game_asset.cpp"
 
 game_state GameState = {};
 
