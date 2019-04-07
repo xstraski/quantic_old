@@ -567,6 +567,11 @@ main(int ArgC, char **ArgV) {
 							b32 DebugCursor = false;
 #endif
 
+							// NOTE(ivan): Detect display refresh rate.
+							XRRScreenConfiguration *ScreenInfo = XRRGetScreenInfo(LinuxState.XDisplay,
+																				  LinuxState.XRootWindow);
+							u32 DisplayFrequency = (u32)XRRConfigCurrentRate(ScreenInfo);
+
 							// NOTE(ivan): Detect controllers.
 							u32 NumControllers = 0;
 							u8 ControllerIDs[MAX_CONTROLLERS] = {};
@@ -847,17 +852,13 @@ main(int ArgC, char **ArgV) {
 									}
 
 									// NOTE(ivan): Finish timings.
-									XRRScreenConfiguration *ScreenInfo = XRRGetScreenInfo(LinuxState.XDisplay,
-																						  LinuxState.XRootWindow);
-									u32 DisplayFrequency = (u32)XRRConfigCurrentRate(ScreenInfo);
-
 									struct timespec WorkCounter = LinuxGetClock();
 
 									f64 TargetSecondsPerFrame = (f64)(1.0 / DisplayFrequency);
 									f64 SecondsElapsedForWork = LinuxGetSecondsElapsed(LastCounter, WorkCounter);
 									GameState.SecondsPerFrame = SecondsElapsedForWork;
 									GameState.FramesPerSecond = 0; // TODO(ivan): Implement me!
-
+									
 									if (SecondsElapsedForWork < TargetSecondsPerFrame) {
 										f64 SecondsToSleep = TargetSecondsPerFrame - SecondsElapsedForWork;
 										u32 SleepMS = (u32)(1000 * SecondsToSleep);
