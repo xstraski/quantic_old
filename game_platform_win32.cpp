@@ -456,8 +456,10 @@ static void
 Win32ResizeVideoBuffer(win32_video_buffer *Buffer, s32 NewWidth, s32 NewHeight) {
 	Assert(Buffer);
 
-	if (Buffer->Pixels)
+	if (Buffer->Pixels) {
 		VirtualFree(Buffer->Pixels, 0, MEM_RELEASE);
+		Buffer->Pixels = 0;
+	}
 
 	u16 NewBytesPerPixel = 4;
 	
@@ -569,7 +571,8 @@ Win32WindowProc(HWND Window, UINT Msg, WPARAM W, LPARAM L) {
 			} break;
 
 			case RI_MOUSE_WHEEL: {
-				GameState.MouseWheel = RawMouse->usButtonData;
+				s32 WheelRotations = (s32)RawMouse->usButtonData / WHEEL_DELTA;
+				GameState.MouseWheel += WheelRotations;
 			} break;
 			}
 		}
@@ -658,6 +661,8 @@ PlatformWriteEntireFile(const char *FileName, void *Base, uptr Size) {
 void
 PlatformFreeEntireFilePiece(piece *Piece) {
 	Assert(Piece);
+	Assert(Piece->Base);
+	
 	VirtualFree(Piece->Base, 0, MEM_RELEASE);
 }
 
@@ -881,7 +886,6 @@ WinMain(HINSTANCE Instance,
 								}
 
 								// NOTE(ivan): Process Win32-side input events.
-								//
 								if (GameState.KeyboardButtons[KeyCode_F4].IsDown &&
 									(GameState.KeyboardButtons[KeyCode_LeftAlt].IsDown || GameState.KeyboardButtons[KeyCode_RightAlt].IsDown))
 									PlatformQuit(0);
@@ -890,7 +894,7 @@ WinMain(HINSTANCE Instance,
 									DebugCursor = !DebugCursor;
 #endif
 
-								// NOTE(ivan): Set cursor.
+								// NOTE(ivan): Set debug cursor.
 								if (DebugCursor)
 									SetCursor(LoadCursorA(0, MAKEINTRESOURCEA(32515))); // NOTE(ivan): IDC_CROSS.
 								else

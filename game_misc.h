@@ -10,7 +10,19 @@
 
 #include "game_platform.h"
 
-void
+inline void
+CopyMemory(void *Dest, void *Src, uptr Size) {
+	Assert(Dest);
+	Assert(Src);
+	Assert(Size);
+
+	u8 *DestByte = (u8 *)Dest;
+	u8 *SrcByte = (u8 *)Src;
+	while (Size--)
+		*DestByte++ = *SrcByte++;
+}
+
+inline void
 CopyString(char *DestString, const char *SrcString) {
 	Assert(DestString);
 	Assert(SrcString);
@@ -19,7 +31,7 @@ CopyString(char *DestString, const char *SrcString) {
 		*DestString++ = *SrcString++;
 }
 
-void
+inline void
 CopyStringN(char *DestString, const char *SrcString, uptr MaxCount) {
 	Assert(DestString);
 	Assert(SrcString);

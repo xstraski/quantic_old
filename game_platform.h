@@ -13,6 +13,10 @@
 //
 #if defined(_MSC_VER)
 #define MSVC 1
+#define GNUC 0
+#elif defined(__GNUC__)
+#define MSVC 0
+#define GNUC 1
 #else
 #error "Unsupported compiler!"
 #endif
@@ -35,6 +39,8 @@
 //
 #if MSVC
 #include <intrin.h>
+#elif GNUC
+#include <x86intrin.h>
 #endif
 
 // NOTE(ivan): Base integer types.
@@ -262,10 +268,21 @@ inline u32 AtomicExchangeU32(volatile u32 *Target, u32 Value) {return _Interlock
 inline u64 AtomicExchangeU64(volatile u64 *Target, u64 Value) {return _InterlockedExchange64((volatile __int64 *)Target, Value);}
 inline u32 AtomicCompareExchangeU32(volatile u32 *Value, u32 NewValue, u32 Exp) {return _InterlockedCompareExchange((volatile long *)Value, NewValue, Exp);}
 inline u64 AtomicCompareExchangeU64(volatile u64 *Value, u64 NewValue, u64 Exp) {return _InterlockedCompareExchange64((volatile __int64 *)Value, NewValue, Exp);}
+#elif GNUC
+inline u32 AtomicIncrementU32(volatile u32 *Value) {return __sync_fetch_and_add(Value, 1);}
+inline u64 AtomicIncrementU64(volatile u64 *Value) {return __sync_fetch_and_add(Value, 1);}
+inline u32 AtomicDecrementU32(volatile u32 *Value) {return __sync_fetch_and_sub(Value, 1);}
+inline u64 AtomicDecrementU64(volatile u64 *Value) {return __sync_fetch_and_sub(Value, 1);}
+inline u32 AtomicExchangeU32(volatile u32 *Target, u32 Value) {return __sync_lock_test_and_set(Target, Value);}
+inline u64 AtomicExchangeU64(volatile u64 *Target, u64 Value) {return __sync_lock_test_and_set(Target, Value);}
+inline u32 AtomicCompareExchangeU32(volatile u32 *Value, u32 NewValue, u32 Exp) {return __sync_val_compare_and_swap(Value, Exp, NewValue);}
+inline u64 AtomicCompareExchangeU64(volatile u64 *Value, u64 NewValue, u64 Exp) {return __sync_val_compare_and_swap(Value, Exp, NewValue);}
 #endif
 
 // NOTE(ivan): Yield processor, give its time to other threads.
 #if MSVC
+inline void YieldProcessor(void) {_mm_pause();}
+#elif GNUC
 inline void YieldProcessor(void) {_mm_pause();}
 #endif
 

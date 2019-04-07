@@ -7,6 +7,8 @@
    ===================================================================== */
 #if WIN32
 #include "game_platform_win32.cpp"
+#elif LINUX
+#include "game_platform_linux.cpp"
 #else
 #error Unsupported target platform!
 #endif
