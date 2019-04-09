@@ -19,7 +19,6 @@
 #include <time.h>
 #include <fcntl.h>
 #include <dirent.h>
-#include <dlfcn.h>
 
 // NOTE(ivan): X11 includes.
 #include <X11/Xlib.h>
@@ -560,7 +559,8 @@ main(int ArgC, char **ArgV) {
 						LinuxResizeVideoBuffer(&SecondaryVideoBuffer, WindowDim.Width, WindowDim.Height);
 
 						Bool DetectableAutoRepeat;
-						if (XkbSetDetectableAutoRepeat(LinuxState.XDisplay, True, &DetectableAutoRepeat) && DetectableAutoRepeat) {
+						XkbSetDetectableAutoRepeat(LinuxState.XDisplay, False, &DetectableAutoRepeat);
+						if (DetectableAutoRepeat) {
 #if INTERNAL
 							b32 DebugCursor = true;
 #else
@@ -656,9 +656,9 @@ main(int ArgC, char **ArgV) {
 												WindowDim = LinuxGetWindowClientDimension(W);
 
 												if (SecondaryVideoBuffer.Pixels) {
-													CopyMemory(SecondaryVideoBuffer.Image->data,
-															   SecondaryVideoBuffer.Pixels,
-															   SecondaryVideoBuffer.Width * SecondaryVideoBuffer.Height * SecondaryVideoBuffer.BytesPerPixel);
+													CopyBytes(SecondaryVideoBuffer.Image->data,
+															  SecondaryVideoBuffer.Pixels,
+															  SecondaryVideoBuffer.Width * SecondaryVideoBuffer.Height * SecondaryVideoBuffer.BytesPerPixel);
 													XShmPutImage(LinuxState.XDisplay,
 																 W, WindowGC,
 																 SecondaryVideoBuffer.Image,

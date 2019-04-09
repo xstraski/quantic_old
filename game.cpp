@@ -33,6 +33,8 @@ GameUpdate(game_update_type UpdateType) {
 		// Game de-initialization.
 		///////////////////////////////////////////////////////////////////
 	case GameUpdateType_Release: {
+		if (GameState.KeyboardButtons[KeyCode_F].IsDown)
+			PlatformQuit(0);
 	} break;
 
 		///////////////////////////////////////////////////////////////////

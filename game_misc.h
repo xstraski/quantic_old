@@ -11,7 +11,7 @@
 #include "game_platform.h"
 
 inline void
-CopyMemory(void *Dest, void *Src, uptr Size) {
+CopyBytes(void *Dest, void *Src, uptr Size) {
 	Assert(Dest);
 	Assert(Src);
 	Assert(Size);

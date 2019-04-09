@@ -92,9 +92,9 @@ struct game_state {
 	// NOTE(ivan): Input state.
 	game_input_button KeyboardButtons[KeyCode_MaxCount];
 	game_input_button MouseButtons[5];
-	game_input_xbox_controller XboxControllers[4];
 	point MousePos;
 	s32 MouseWheel; // NOTE(ivan): Number of scrolls per frame. Negative value indicates the wheel was rotated backward, toward the user.
+	game_input_xbox_controller XboxControllers[4];
 
 	// NOTE(ivan): Clocks.
 	f64 CyclesPerFrame;
