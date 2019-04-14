@@ -57,6 +57,9 @@ AreStringsEqual(const char *String1, const char *String2) {
 			Result = false;
 			break;
 		}
+
+		String1++;
+		String2++;
 	}
 
 	return Result;

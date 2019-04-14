@@ -97,6 +97,9 @@ struct win32_video_buffer {
 
 // NOTE(ivan): Win32 global variables.
 static struct {
+	s32 ArgC;
+	char **ArgV;
+	
 	HINSTANCE Instance;
 	UINT QueryCancelAutoplay;
 
@@ -595,6 +598,31 @@ PlatformQuit(s32 QuitCode) {
 	Win32State.QuitCode = QuitCode;
 }
 
+s32
+PlatformCheckParam(const char *Param) {
+	Assert(Param);
+
+	for (s32 Index = 0; Index < LinuxState.ArgC; Index++) {
+		if (AreStringsEqual(LinuxState.ArgV[Index], Param))
+			return Index;
+	}
+
+	return PARAM_MISSING;
+}
+
+const char *
+PlatformCheckParamValue(const char *Param) {
+	Assert(Param);
+
+	s32 Index = PlatformCheckParam(Param);
+	if (Index == PARAM_MISSING)
+		return 0;
+	if ((Index + 1) >= LinuxState.ArgC)
+		return 0;
+
+	return LinuxState.ArgV[Index + 1];
+}
+
 piece
 PlatformReadEntireFile(const char *FileName) {
 	Assert(FileName);
@@ -666,6 +694,43 @@ PlatformFreeEntireFilePiece(piece *Piece) {
 	VirtualFree(Piece->Base, 0, MEM_RELEASE);
 }
 
+#if INTERNAL
+#if SLOWCODE
+void
+DEBUGPlatformOutf(const char *Format, ...) {
+	Assert(Format);
+
+	// TODO(ivan): Get rid of using CRT's va routines.
+	if (IsDebuggerPresent()) {
+		va_list ArgsList;
+		va_start(ArgsList, Format);
+		char Buffer[2048] = {};
+		
+		va_start(ArgsList, Format);
+		vsnprintf(Buffer, CountOf(Buffer) - 1, Format, ArgsList);
+		va_end(ArgsList);
+
+		OutputDebugStringA("## ");
+		OutputDebugStringA(Buffer);
+		OutputDebugStringA("\r\n");
+	}
+}
+
+void
+DEBUGPlatformOutFailedAssertion(const char *SrcFile,
+								u32 SrcLine,
+								const char *SrcExpr) {
+	Assert(SrcFile);
+	Assert(SrcExpr);
+
+	DEBUGPlatformOutf("*** ASSERTION FAILED ***");
+	DEBUGPlatformOutf("[SrcFile] %s", SrcFile);
+	DEBUGPlatformOutf("[SrcLine] %d", SrcLine);
+	DEBUGPlatformOutf("[SrcExpr] %s", SrcExpr);
+}
+#endif // #if SLOWCODE
+#endif // #if INTERNAL
+
 int CALLBACK
 WinMain(HINSTANCE Instance,
 		HINSTANCE PrevInstance,
@@ -674,6 +739,10 @@ WinMain(HINSTANCE Instance,
 	UnusedParam(PrevInstance);
 	UnusedParam(CommandLine);
 	UnusedParam(ShowCommand);
+
+	// TODO(ivan): Manually parse CommandLine, exclude CRT's __argc/__argv usage!
+	Win32State.ArgC = __argc;
+	Win32State.ArgV = __argv;
 	
 	Win32State.Instance = Instance;
 	Win32SetThreadName(GetCurrentThreadId(), GAMENAME " Primary Thread");
@@ -704,6 +773,9 @@ WinMain(HINSTANCE Instance,
 			CopyString(Win32State.ExecutableName, PastLastSlash);
 			CopyStringN(Win32State.ExecutablePath, ModuleName, PastLastSlash - ModuleName);
 
+			DEBUGPlatformOutf("Executable name: %s", Win32State.ExecutableName);
+			DEBUGPlatformOutf("Executable path: %s", Win32State.ExecutablePath);
+
 			// NOTE(ivan): Prepare game main memory (hunk).
 			uptr HunkSize = 0;
 
@@ -716,10 +788,14 @@ WinMain(HINSTANCE Instance,
 			}
 #endif
 
+			const char *ParamHunk = PlatformCheckParamValue("-hunk");
+
 			MEMORYSTATUSEX MemStat;
 			MemStat.dwLength = sizeof(MemStat);
 			if (GlobalMemoryStatusEx(&MemStat)) {
-				HunkSize = (uptr)(0.7f * (f32)MemStat.ullAvailPhys);
+				HunkSize = (uptr)(0.9f * (f32)MemStat.ullAvailPhys);
+			} else if (ParamHunk) {
+				sscanf(ParamHunk, "%zu", &HunkSize); // TODO(ivan): Replace CRT's sscanf() with our own function.
 			} else {
 #if defined(_M_IX86)
 				HunkSize = IsWow64 ? Megabytes(3584) : Gigabytes(3);
@@ -731,6 +807,9 @@ WinMain(HINSTANCE Instance,
 			SYSTEM_INFO SysInfo;
 			GetNativeSystemInfo(&SysInfo);
 			HunkSize = AlignPow2(HunkSize, (uptr)SysInfo.dwPageSize);
+
+			DEBUGPlatformOutf("Memory available: %zuKb", MemStat.ullAvailPhys / 1024);
+			DEBUGPlatformOutf("Hunk size: %zuKb", HunkSize / 1024);
 
 			GameState.Hunk.Size = HunkSize;
 			GameState.Hunk.Base = (u8 *)VirtualAlloc(0, HunkSize, MEM_COMMIT, PAGE_READWRITE);
@@ -785,17 +864,18 @@ WinMain(HINSTANCE Instance,
 							if (!XInputLibrary) {
 								XIGetState = Win32XInputGetStateStub;
 								XISetState = Win32XInputSetStateStub;
-								// TODO(ivan): Diagnostics.
+								DEBUGPlatformOutf("XInput Library is missing. Using stubs.");
 							} else {
 								XIGetState = (x_input_get_state *)GetProcAddress(XInputLibrary, "XInputGetState");
 								XISetState = (x_input_set_state *)GetProcAddress(XInputLibrary, "XInputSetState");
 
 								if (XIGetState && XISetState) {
 									// NOTE(ivan): Success.
+									DEBUGPlatformOutf("XInput Library successfully loaded.");
 								} else {
 									XIGetState = Win32XInputGetStateStub;
 									XISetState = Win32XInputSetStateStub;
-									// TODO(ivan): Diagnostics.
+									DEBUGPlatformOutf("XInput Library is missing. Using stubs.");
 								}
 							}
 
@@ -971,7 +1051,6 @@ WinMain(HINSTANCE Instance,
 									}
 								} else {
 									// NOTE(ivan): Missing framerate!
-									// TODO(ivan): Diagnostics.
 								}
 
 								u64 EndCounter = Win32GetClock();
@@ -994,29 +1073,29 @@ WinMain(HINSTANCE Instance,
 							
 							ReleaseDC(Window, WindowDC);
 						} else {
-							// TODO(ivan): Diagnostics (GetDC).
+							DEBUGPlatformOutf("Cannot create main window, GetDC() failed. Last Win32 error: 0x%X", GetLastError());
 						}
 					
 						DestroyWindow(Window);
 					} else {
-						// TODO(ivan): Diagnostics (CreateWindowExA).
+						DEBUGPlatformOutf("Cannot create main window, CreateWindowExA() failed. Last Win32 error: 0x%X", GetLastError());
 					}
 				
 					UnregisterClassA(WindowClass.lpszClassName, Win32State.Instance);
 				} else {
-					// TODO(ivan): Diagnostics (RegisterClassA).
+					DEBUGPlatformOutf("Cannot create main window, RegisterClassA() failed. Last Win32 error: 0x%X", GetLastError());
 				}
 			} else {
-				// TODO(ivan): Diagnostics (VirtualAlloc).
+				DEBUGPlatformOutf("Cannot allocate enough hunk memory, VirtualAlloc() failed. Last Win32 error: 0x%X", GetLastError());
 			}
 
 			if (IsSleepGranular)
 				timeEndPeriod(1);
 		} else {
-			// TODO(ivan): Diagnostics (QueryPerformanceFrequency).
+			DEBUGPlatformOutf("Cannot obtain HW timer, QueryPerformanceFrequency() failed. Last Win32 error: 0x%X", GetLastError());
 		}
 	} else {
-		// TODO(ivan): Diagnostics (IsWindows7OrGreater).
+		DEBUGPlatformOutf("OS is too obsolete, requires at least Windows 7!");
 	}
 	
 	return Win32State.QuitCode;

@@ -18,7 +18,7 @@
 
 // NOTE(ivan): Game video buffer.
 struct game_video_buffer {
-	u32 *Pixels;
+	u32 *Pixels; // NOTE(ivan): Always 32-bit wide, format: 0xAARRGGBB.
 	s32 Width;
 	s32 Height;
 	s32 BytesPerPixel;

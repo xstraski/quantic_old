@@ -23,6 +23,7 @@
 
 //
 // NOTE(ivan): C standard includes.
+// TODO(ivan): Get rid of this includes. CRT must be used only in some platform-specific code.
 //
 #include <stddef.h>
 #include <stdio.h>
@@ -67,6 +68,10 @@ typedef u32 b32; // NOTE(ivan): Forget about standard C++ bool, wa want our bool
 // NOTE(ivan): Used to shut up the compiler complaining about an unused variable.
 #define UnusedParam(Param) (Param)
 
+// NOTE(ivan): Adds quotes.
+#define XSTRING2(X) #X
+#define XSTRING(String) XSTRING2(String)
+
 // NOTE(ivan): Calculates a given array's elements count. Do not place functions/expressions as the 'arr' parameter, cuz they will be exeute twice!!!
 template <typename T, u32 N> inline constexpr u32
 CountOf(T (&Array)[N]) {
@@ -96,7 +101,8 @@ Swap(T A, T B) {
 // NOTE(ivan): Debug assertions.
 #define BreakDebugger() do {*((s32 *)0) = 1;} while(0)
 #if SLOWCODE
-#define Assert(Expression) do {if (!(Expression)) BreakDebugger();} while(0)
+void DEBUGPlatformOutFailedAssertion(const char *SrcFile, u32 SrcLine, const char *SrcExpr);
+#define Assert(Expression) do {if (!(Expression)) {DEBUGPlatformOutFailedAssertion(__FILE__, __LINE__, XSTRING(Expression)); BreakDebugger();}} while(0)
 #else
 #define Assert(Expression)
 #endif
@@ -206,18 +212,29 @@ FindMostSignificantBit(u32 Value)
 	return Result;
 }
 
+// NOTE(ivan): Rounding.
+#if MSVC
+inline s32 RoundF32ToS32(f32 Value) {return _mm_cvtss_si32(_mm_set_ss(Value));}
+inline u32 RoundF32ToU32(f32 Value) {return (u32)_mm_cvtss_si32(_mm_set_ss(Value));}
+#elif GNUC
+inline s32 RoundF32ToS32(f32 Value) {return _mm_cvtss_si32(_mm_set_ss(Value));}
+inline u32 RoundF32ToU32(f32 Value) {return (u32)_mm_cvtss_si32(_mm_set_ss(Value));}
+#else
+inline s32 RoundF32ToS32(f32 Value) {return (s32)(Value + 0.5f);}
+inline u32 RoundF32ToU32(f32 Value) {return (u32)(Value + 0.5f);}
+#endif
+
 // NOTE(ivan): Generic-purpose structure for holding a memory piece of information.
 struct piece {
 	u8 *Base;
 	uptr Size;
 };
 
-// NOTE(ivan): Helper function for reading from buffers.
+// NOTE(ivan): Helper functions for reading from buffers.
 #define ConsumeType(Piece, Type) (Type *)ConsumeSize(Piece, sizeof(Type))
 #define ConsumeTypeArray(Piece, Type, Count) (Type *)ConsumeSize(Piece, sizeof(Type) * Count)
 inline void *
-ConsumeSize(piece *Piece, uptr Size)
-{
+ConsumeSize(piece *Piece, uptr Size) {
 	Assert(Piece);
 	Assert(Piece->Size >= Size);
 	
@@ -226,6 +243,16 @@ ConsumeSize(piece *Piece, uptr Size)
 	Piece->Size -= Size;
 
 	return Result;
+}
+
+#define ReturnType(Piece, Type) ReturnSize(Piece, sizeof(Type))
+#define ReturnTypeArray(Piece, Type, Count) ReturnType(Piece, sizeof(Type) * Count)
+inline void
+ReturnSize(piece *Piece, uptr Size) {
+	Assert(Piece);
+
+	Piece->Base = (Piece->Base - Size);
+	Piece->Size += Size;
 }
 
 // NOTE(ivan): Endian-ness utilities.
@@ -314,8 +341,26 @@ LeaveTicketMutex(ticket_mutex *Mutex) {
 //
 void PlatformQuit(s32 QuitCode);
 
+#define PARAM_MISSING ((s32)-1)
+s32 PlatformCheckParam(const char *Param);
+const char * PlatformCheckParamValue(const char *Param);
+
 piece PlatformReadEntireFile(const char *FileName);
 b32 PlatformWriteEntireFile(const char *FileName, void *Base, uptr Size);
 void PlatformFreeEntireFilePiece(piece *Piece);
+
+// NOTE(ivan): Debug platform-specific routines available only in Internal/SlowCode builds.
+#if INTERNAL
+#if SLOWCODE
+void DEBUGPlatformOutf(const char *Format, ...);
+void DEBUGPlatformOutFailedAssertion(const char *SrcFile, u32 SrcLine, const char *SrcExpr);
+#else
+#define DEBUGPlatformOutf(...) do {} while(0)
+#define DEBUGPlatformOutFailedAssertion(SrcFile, SrcLine, SrcExpr) do {} while(0)
+#endif
+#else
+#define DEBUGPlatformOutf(...) do {} while(0)
+#define DEBUGPlatformOutFailedAssertion(SrcFile, SrcLine, SrcExpr) do {} while(0)
+#endif
 
 #endif // #ifndef GAME_PLATFORM_H

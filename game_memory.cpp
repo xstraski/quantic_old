@@ -21,7 +21,11 @@ AllocPartitionBlock(memory_partition_block *PrevBlock, uptr InitSize) {
 			Result->Piece.Size = InitSize;
 
 			Result->PrevBlock = PrevBlock;
+		} else {
+			ReturnType(&GameState.Hunk, memory_partition_block);
 		}
+	} else {
+		DEBUGPlatformOutf("AllocPartitionBlock() failed, requested %zu byte(s)!", InitSize);
 	}
 
 	return Result;
@@ -87,6 +91,8 @@ PushSize(memory_partition *Partition, uptr Size) {
 	if (Block) {
 		Result = (void *)(Block->Piece.Base + Block->Marker);
 		Block->Marker += Size;
+	} else {
+		DEBUGPlatformOutf("PushSize() failed, requested %zu byte(s)!", Size);
 	}
 
 	LeaveTicketMutex(&Partition->Mutex);

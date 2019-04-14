@@ -72,6 +72,9 @@ struct linux_video_buffer {
 
 // NOTE(ivan): Linux global variables.
 static struct linux_state {
+	s32 ArgC;
+	char **ArgV;
+	
 	b32 Quitting;
 	s32 QuitCode;
 
@@ -394,6 +397,31 @@ PlatformQuit(s32 QuitCode) {
 	LinuxState.QuitCode = QuitCode;
 }
 
+s32
+PlatformCheckParam(const char *Param) {
+	Assert(Param);
+
+	for (s32 Index = 0; Index < LinuxState.ArgC; Index++) {
+		if (AreStringsEqual(LinuxState.ArgV[Index], Param))
+			return Index;
+	}
+
+	return PARAM_MISSING;
+}
+
+const char *
+PlatformCheckParamValue(const char *Param) {
+	Assert(Param);
+
+	s32 Index = PlatformCheckParam(Param);
+	if (Index == PARAM_MISSING)
+		return 0;
+	if ((Index + 1) >= LinuxState.ArgC)
+		return 0;
+
+	return LinuxState.ArgV[Index + 1];
+}
+
 piece
 PlatformReadEntireFile(const char *FileName) {
 	Assert(FileName);
@@ -455,8 +483,45 @@ PlatformFreeEntireFilePiece(piece *Piece) {
 	Piece->Size = 0;
 }
 
+#if INTERNAL
+#if SLOWCODE
+void
+DEBUGPlatformOutf(const char *Format, ...) {
+	Assert(Format);
+	
+	// TODO(ivan): Get rid of using CRT's va routines.
+	va_list ArgsList;
+	va_start(ArgsList, Format);
+	
+	printf("## ");
+	vprintf(Format, ArgsList);
+	printf("\n");
+	
+	va_end(ArgsList);
+}
+
+void
+DEBUGPlatformOutFailedAssertion(const char *SrcFile,
+								u32 SrcLine,
+								const char *SrcExpr) {
+	Assert(SrcFile);
+	Assert(SrcExpr);
+
+	DEBUGPlatformOutf("*** ASSERTION FAILED ***");
+	DEBUGPlatformOutf("[SrcFile] %s", SrcFile);
+	DEBUGPlatformOutf("[SrcLine] %d", SrcLine);
+	DEBUGPlatformOutf("[SrcExpr] %s", SrcExpr);
+}
+#endif // #if SLOWCODE
+#endif // #if INTERNAL
+
 int
 main(int ArgC, char **ArgV) {
+	DEBUGPlatformOutf("Starting " GAMENAME "...");
+
+	LinuxState.ArgC = ArgC;
+	LinuxState.ArgV = ArgV;
+	
 	// NOTE(ivan): Obtain executable's file name and path.
 	char ModuleName[2048] = {};
 	readlink("/proc/self/exe", ModuleName, CountOf(ModuleName) - 1);
@@ -468,6 +533,9 @@ main(int ArgC, char **ArgV) {
 	}
 	CopyString(LinuxState.ExecutableName, PastLastSlash);
 	CopyStringN(LinuxState.ExecutablePath, ModuleName, PastLastSlash - ModuleName);
+
+	DEBUGPlatformOutf("Executable name: %s", LinuxState.ExecutableName);
+	DEBUGPlatformOutf("Executable path: %s", LinuxState.ExecutablePath);
 
 	// NOTE(ivan): Establish connect with X.
 	LinuxState.XDisplay = XOpenDisplay(getenv("DISPLAY"));
@@ -484,24 +552,38 @@ main(int ArgC, char **ArgV) {
 		int ShmMajor, ShmMinor;
 		Bool ShmPixmaps;
 		if (XShmQueryVersion(LinuxState.XDisplay, &ShmMajor, &ShmMinor, &ShmPixmaps)) {
+			DEBUGPlatformOutf("X MIT-SHM extension found, version %d.%d", ShmMajor, ShmMinor);
+			
 			// NOTE(ivan): Check X11 XKB extension support.
 			int XkbMajor = XkbMajorVersion, XkbMinor = XkbMinorVersion;
 			if (XkbLibraryVersion(&XkbMajor, &XkbMinor)) {
+				DEBUGPlatformOutf("X XKB extension found, version compile-time(%d.%d), run-time(%d.%d)", XkbMajorVersion, XkbMinorVersion, XkbMajor, XkbMinor);
+				
 				// NOTE(ivan): Check X11 XRandR extension support.
 				int XRRMajor, XRRMinor;
 				if (XRRQueryVersion(LinuxState.XDisplay, &XRRMajor, &XRRMinor)) {
+					DEBUGPlatformOutf("X XRR extension found, version %d.%d", XRRMajor, XRRMinor);
+					
 					// NOTE(ivan): Game memory preparation (hunk).
 					uptr HunkSize = 0;
 					u32 MemAvailable = sysconf(_SC_PAGE_SIZE) * sysconf(_SC_AVPHYS_PAGES);
-					if (MemAvailable) {
-						HunkSize = MemAvailable;
+
+					const char *ParamHunk = PlatformCheckParamValue("-hunk");
+					if (ParamHunk) {
+						sscanf(ParamHunk, "%zu", &HunkSize); // TODO(ivan): Replace CRT's sscanf() with our own function.
+					} else if (MemAvailable) {
+						HunkSize = (u32)(0.9f * (f32)MemAvailable);
 					} else {
 #if defined(__i386__)					
 						HunkSize = Gigabytes(2);
 #elif defined(__x86_64__) || defined(__amd64__)
-						HunkSize = (u32)(0.7f * (f32)HunkSize);
+						HunkSize = Gigabytes(4);
 #endif
 					}
+
+					DEBUGPlatformOutf("Memory available: %dKb", MemAvailable / 1024);
+					DEBUGPlatformOutf("Hunk size: %zuKb", HunkSize / 1024);
+					
 					GameState.Hunk.Size = HunkSize;
 					GameState.Hunk.Base = (u8 *)mmap(0, HunkSize, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
 					if (GameState.Hunk.Base) {
@@ -509,7 +591,7 @@ main(int ArgC, char **ArgV) {
 						XSetWindowAttributes WindowAttr = {};
 						WindowAttr.background_pixel = LinuxState.XDefBlack;
 						WindowAttr.border_pixel = LinuxState.XDefBlack;
-						WindowAttr.event_mask = StructureNotifyMask | KeyPressMask | KeyReleaseMask | ButtonPressMask | ButtonReleaseMask | PointerMotionMask;
+						WindowAttr.event_mask = StructureNotifyMask | KeyPressMask | KeyReleaseMask | ButtonPressMask | ButtonReleaseMask;
 
 						point WindowPos = {20, 20};
 						rectangle WindowDim = {800, 600};
@@ -613,7 +695,8 @@ main(int ArgC, char **ArgV) {
 													ControllerEDs[Index] = File;
 													// NOTE(ivan): Send the effect to the driver.
 													if (ioctl(File, EVIOCSFF, &ControllerEffect) == -1) {
-														// TODO(ivan): Diagnostics.
+														DEBUGPlatformOutf("Failed sending the effect to the game controller driver.");
+														DEBUGPlatformOutf("%s: %s", AnotherBuffer, TempBuffer);
 													}
 
 													break;
@@ -863,12 +946,11 @@ main(int ArgC, char **ArgV) {
 										f64 SecondsToSleep = TargetSecondsPerFrame - SecondsElapsedForWork;
 										u32 SleepMS = (u32)(1000 * SecondsToSleep);
 										if (SleepMS > 0) {
-											sleep(SleepMS);
+											usleep(SleepMS);
 											SecondsElapsedForWork += SecondsToSleep;
 										}
 									} else {
 										// NOTE(ivan): Missing framerate!
-										// TODO(ivan): Diagnostics.
 									}
 
 									struct timespec EndCounter = LinuxGetClock();
@@ -883,27 +965,27 @@ main(int ArgC, char **ArgV) {
 								GameUpdate(GameUpdateType_Release);
 							}
 						} else {
-							// TODO(ivan): Diagnostics (XkbSetDetectableAutoRepeat).
+							DEBUGPlatformOutf("XkbSetDetectanbleAutoRepeat() failed!");
 						}
 
 						munmap(GameState.Hunk.Base, GameState.Hunk.Size);
 					} else {
-						// TODO(ivan): Diagnostics (mmap).
+						DEBUGPlatformOutf("Could not allocate enough hunk memory!");
 					}
 				} else {
-					// TODO(ivan): Diagnostics (XRRQueryVersion).
+					DEBUGPlatformOutf("XRR is not available!");
 				}
 			} else {
-				// TODO(ivan): Diagnostics (XkbLibraryVersion).
+				DEBUGPlatformOutf("XKB is not available!");
 			}
 		} else {
-			// TODO(ivan): Diagnostics (XShmQueryVersion).
+			DEBUGPlatformOutf("MIT-SHM is not available!");
 		}
 
 		XCloseDisplay(LinuxState.XDisplay);
 	} else {
-		// TODO(ivan): Diagnostics (XOpenDisplay).
+		DEBUGPlatformOutf("X not responding!");
 	}
 	
-	return 0;
+	return LinuxState.QuitCode;
 }
