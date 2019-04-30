@@ -8,6 +8,7 @@
 #ifndef GAME_ASSET_H
 #define GAME_ASSET_H
 
-#include "game_platform.h"
+#include "game_memory.h"
+#include "game_image.h"
 
 #endif // #ifndef GAME_ASSET_H

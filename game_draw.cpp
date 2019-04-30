@@ -20,9 +20,9 @@ DoLinearBlending(f32 AlphaChannel,
 				 u8 SrcR, u8 SrcG, u8 SrcB) {
 	blending_result Result;
 
-	Result.R = (u8)RoundF32ToS32((1.0f - AlphaChannel) * DstR + AlphaChannel * SrcR);
-	Result.G = (u8)RoundF32ToS32((1.0f - AlphaChannel) * DstG + AlphaChannel * SrcG);
-	Result.B = (u8)RoundF32ToS32((1.0f - AlphaChannel) * DstB + AlphaChannel * SrcB);
+	Result.R = (u8)roundf((1.0f - AlphaChannel) * DstR + AlphaChannel * SrcR);
+	Result.G = (u8)roundf((1.0f - AlphaChannel) * DstG + AlphaChannel * SrcG);
+	Result.B = (u8)roundf((1.0f - AlphaChannel) * DstB + AlphaChannel * SrcB);
 
 	return Result;
 }
@@ -31,13 +31,13 @@ void
 DrawPixel(game_video_buffer *Buffer, v2 Pos, v4 Color) {
 	Assert(Buffer);
 
-	s32 PosX = RoundF32ToS32(Pos.X);
-	s32 PosY = RoundF32ToS32(Pos.Y);
+	s32 PosX = (s32)roundf(Pos.X);
+	s32 PosY = (s32)roundf(Pos.Y);
 
-	u8 ColorR = (u8)RoundF32ToS32(Color.R);
-	u8 ColorG = (u8)RoundF32ToS32(Color.G);
-	u8 ColorB = (u8)RoundF32ToS32(Color.B);
-	u8 ColorA = (u8)RoundF32ToS32(Color.A);
+	u8 ColorR = (u8)roundf(Color.R);
+	u8 ColorG = (u8)roundf(Color.G);
+	u8 ColorB = (u8)roundf(Color.B);
+	u8 ColorA = (u8)roundf(Color.A);
 	u32 Color32 = ((ColorA << 24) |
 				   (ColorR << 16) |
 				   (ColorG << 8) |
@@ -79,8 +79,8 @@ DrawImage(game_video_buffer *Buffer, image *Image, v2 Pos) {
 	point Pos1;
 	point Pos2;
 
-	Pos1.X = RoundF32ToS32(Pos.X);
-	Pos1.Y = RoundF32ToS32(Pos.Y);
+	Pos1.X = (s32)roundf(Pos.X);
+	Pos1.Y = (s32)roundf(Pos.Y);
 
 	Pos2.X = Pos1.X + Image->Width;
 	Pos2.Y = Pos1.Y + Image->Height;

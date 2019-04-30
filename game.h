@@ -10,8 +10,10 @@
 
 #include "game_platform.h"
 #include "game_keys.h"
+#include "game_error.h"
 #include "game_math.h"
 #include "game_memory.h"
+#include "game_asset.h"
 
 // NOTE(ivan): Game title, should be one simple UpperCamelCase word.
 #define GAMENAME "Quantic"
@@ -77,13 +79,6 @@ struct game_input_xbox_controller {
 
 // NOTE(ivan): Game state.
 struct game_state {
-	// NOTE(ivan): Main memory block. Must be zero-initialized at startup.
-	piece Hunk;
-	ticket_mutex HunkMutex;
-
-	// NOTE(ivan): Temp memory buffer that holds data per-frame.
-	memory_partition PerFramePartition;
-	
 	// NOTE(ivan): Video buffer to write graphics in.
 	game_video_buffer VideoBuffer;
 	// NOTE(ivan): Audio buffer to write sounds in.
@@ -101,7 +96,11 @@ struct game_state {
 	f64 SecondsPerFrame;
 	f64 FramesPerSecond;
 };
-extern game_state GameState;
+
+// NOTE(ivan): Game thread local storage.
+struct game_tl_state {
+	error_code LastError;
+};
 
 // NOTE(ivan): Game update type.
 enum game_update_type {
@@ -110,6 +109,6 @@ enum game_update_type {
 	GameUpdateType_Frame
 };
 
-void GameUpdate(game_update_type UpdateType);
+void GameUpdate(game_update_type UpdateType, game_state *State, game_tl_state *TLState);
 
 #endif // #ifndef GAME_H

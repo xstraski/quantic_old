@@ -19,6 +19,6 @@ struct image {
 	s32 Pitch;
 };
 
-image LoadImageBmp(const char *FileName, memory_partition *Partition);
+image LoadImageBmp(const char *FileName, memory_heap *Heap);
 
 #endif // #ifndef GAME_IMAGE_H

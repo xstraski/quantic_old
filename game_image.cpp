@@ -39,12 +39,23 @@ struct bmp_bitfields_masks {
 #pragma pack(pop)
 
 image
-LoadImageBmp(const char *FileName, memory_partition *Partition) {
+LoadImageBmp(const char *FileName, memory_heap *Heap) {
 	Assert(FileName);
-	Assert(Partition);
+	Assert(Heap);
+
+	// NOTE(ivan): WARNING - this loader is FAR from being universal. It supports only 32-bit A8R8G8B8 format,
+	// compression with value 3 (bitfields encoding), and alpha channel must be present.
+	// Without alpha channel no image will be shown (alpha channel will be always 0).
+	// Tested with GIMP exporter.
+	// This loader is written only for test purposes, it is unlikely will be used in a shipping product,
+	// so there is no reason to make it complete BMP loader at all.
+
+	// TODO(ivan): Detect somehow whether the alpha channel is present. Fail if not.
 	
 	image Result = {};
 
+	GameTLState.LastError = ErrorCode_NoError;
+	
 	DEBUGPlatformOutf("Loading BMP: %s", FileName);
 
 	piece FilePiece = PlatformReadEntireFile(FileName);
@@ -96,21 +107,21 @@ LoadImageBmp(const char *FileName, memory_partition *Partition) {
 				
 				} else {
 					// NOTE(ivan): Compression other than bitfields encoding is not supported.
-					DEBUGPlatformOutf("BMP load error: unsupported compression (Header->Compression is %d, expected 3)!", Header->Compression);
+					GameTLState.LastError = ErrorCode_BMPLoader_CompressionNot3;
 				}
 			} else {
 				// NOTE(ivan): Only 32-bit images are supported.
-				DEBUGPlatformOutf("BMP load error: unsupported count of bits per pixel (Header->BitsPerPixel is %d, expected 32)!", Header->BitsPerPixel);
+				GameTLState.LastError = ErrorCode_BMPLoader_BitnessNot32;
 			}
 		} else {
 			// NOTE(ivan): File is not BMP.
-			DEBUGPlatformOutf("BMP load error: file has no BMP signature, not BMP file at all?");
+			GameTLState.LastError = ErrorCode_WrongSignature;
 		}
 		
 		PlatformFreeEntireFilePiece(&FilePiece);
 	} else {
 		// NOTE(ivan): Not found.
-		DEBUGPlatformOutf("BMP load error: file not found!");
+		// NOTE(ivan): LastError is already set to GameError_NotFound.
 	}
 
 	return Result;

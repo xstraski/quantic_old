@@ -23,7 +23,6 @@
 
 //
 // NOTE(ivan): C standard includes.
-// TODO(ivan): Get rid of this includes. CRT must be used only in some platform-specific code.
 //
 #include <stddef.h>
 #include <stdio.h>
@@ -44,6 +43,39 @@
 #include <x86intrin.h>
 #endif
 
+// NOTE(ivan): Detect target CPU architecture.
+#if MSVC
+#if defined(_M_IX86) || defined(_M_X64) || defined(_M_AMD64)
+#define INTEL86 1
+#define INTELORDER 1
+#define AMIGAORDER 0
+#if defined(_M_X64) || defined(_M_AMD64)
+#define X32CPU 0
+#define X64CPU 1
+#else
+#define X32CPU 1
+#define X64CPU 0
+#endif
+#else
+#error Unsupported target CPU architecture!
+#endif
+#elif GNUC
+#if defined(__i386__) || defined(__x86_64__) || defined(__amd64__)
+#define INTEL86 1
+#define INTELORDER 1
+#define AMIGAORDER 0
+#if defined(__x86_64__) || defined(__amd64__)
+#define X32CPU 0
+#define X64CPU 1
+#else
+#define X32CPU 1
+#define X64CPU 0
+#endif
+#else
+#error Unsupported target CPU architecture!
+#endif
+#endif
+
 // NOTE(ivan): Base integer types.
 typedef uint8_t u8;
 typedef uint16_t u16;
@@ -58,6 +90,10 @@ typedef int64_t s64;
 // NOTE(ivan): Integers large enough to hold any pointer on target processor platform.
 typedef size_t uptr;
 typedef ptrdiff_t sptr;
+
+// NOTE(ivan): Integers of a maximum size of a target processor platform.
+typedef uintmax_t umax;
+typedef intmax_t smax;
 
 // NOTE(ivan): Float types.
 typedef float f32;
@@ -94,15 +130,16 @@ Max(T A, T B) {
 
 // NOTE(ivan): Swaps data.
 template <typename T> inline void
-Swap(T A, T B) {
-	T Temp = A; A = B; B = Temp;
+Swap(T *A, T *B) {
+	T Tmp = *A;
+	*A = *B;
+	*B = Tmp;
 }
 
 // NOTE(ivan): Debug assertions.
 #define BreakDebugger() do {*((s32 *)0) = 1;} while(0)
 #if SLOWCODE
-void DEBUGPlatformOutFailedAssertion(const char *SrcFile, u32 SrcLine, const char *SrcExpr);
-#define Assert(Expression) do {if (!(Expression)) {DEBUGPlatformOutFailedAssertion(__FILE__, __LINE__, XSTRING(Expression)); BreakDebugger();}} while(0)
+#define Assert(Expression) do {if (!(Expression)) BreakDebugger();} while(0)
 #else
 #define Assert(Expression)
 #endif
@@ -212,18 +249,6 @@ FindMostSignificantBit(u32 Value)
 	return Result;
 }
 
-// NOTE(ivan): Rounding.
-#if MSVC
-inline s32 RoundF32ToS32(f32 Value) {return _mm_cvtss_si32(_mm_set_ss(Value));}
-inline u32 RoundF32ToU32(f32 Value) {return (u32)_mm_cvtss_si32(_mm_set_ss(Value));}
-#elif GNUC
-inline s32 RoundF32ToS32(f32 Value) {return _mm_cvtss_si32(_mm_set_ss(Value));}
-inline u32 RoundF32ToU32(f32 Value) {return (u32)_mm_cvtss_si32(_mm_set_ss(Value));}
-#else
-inline s32 RoundF32ToS32(f32 Value) {return (s32)(Value + 0.5f);}
-inline u32 RoundF32ToU32(f32 Value) {return (u32)(Value + 0.5f);}
-#endif
-
 // NOTE(ivan): Generic-purpose structure for holding a memory piece of information.
 struct piece {
 	u8 *Base;
@@ -243,16 +268,6 @@ ConsumeSize(piece *Piece, uptr Size) {
 	Piece->Size -= Size;
 
 	return Result;
-}
-
-#define ReturnType(Piece, Type) ReturnSize(Piece, sizeof(Type))
-#define ReturnTypeArray(Piece, Type, Count) ReturnType(Piece, sizeof(Type) * Count)
-inline void
-ReturnSize(piece *Piece, uptr Size) {
-	Assert(Piece);
-
-	Piece->Base = (Piece->Base - Size);
-	Piece->Size += Size;
 }
 
 // NOTE(ivan): Endian-ness utilities.
@@ -349,18 +364,13 @@ piece PlatformReadEntireFile(const char *FileName);
 b32 PlatformWriteEntireFile(const char *FileName, void *Base, uptr Size);
 void PlatformFreeEntireFilePiece(piece *Piece);
 
-// NOTE(ivan): Debug platform-specific routines available only in Internal/SlowCode builds.
+//
+// NOTE(ivan): Platform-specific debug-only interface.
+//
 #if INTERNAL
-#if SLOWCODE
 void DEBUGPlatformOutf(const char *Format, ...);
-void DEBUGPlatformOutFailedAssertion(const char *SrcFile, u32 SrcLine, const char *SrcExpr);
 #else
-#define DEBUGPlatformOutf(...) do {} while(0)
-#define DEBUGPlatformOutFailedAssertion(SrcFile, SrcLine, SrcExpr) do {} while(0)
-#endif
-#else
-#define DEBUGPlatformOutf(...) do {} while(0)
-#define DEBUGPlatformOutFailedAssertion(SrcFile, SrcLine, SrcExpr) do {} while(0)
+inline void DEBUGPlatformOutf(const char *Format, ...) {}
 #endif
 
 #endif // #ifndef GAME_PLATFORM_H
